@@ -3,43 +3,67 @@
 class QuotaInfo {
   final int? id;
   final int accountId;
-  final double totalQuota;
-  final double usedQuota;
-  final String unit; // 'usd' | 'tokens' | 'requests'
+  final double limit;
+  final double used;
+  final String unit; // 'USD' | 'tokens' | 'requests' | 'credits'
   final DateTime fetchedAt;
   final bool isManual;
+  final Map<String, dynamic>? rawData;
 
   const QuotaInfo({
     this.id,
     required this.accountId,
-    required this.totalQuota,
-    required this.usedQuota,
+    required this.limit,
+    required this.used,
     required this.unit,
     required this.fetchedAt,
     this.isManual = false,
+    this.rawData,
   });
 
-  double get remainingQuota =>
-      (totalQuota - usedQuota).clamp(0, double.infinity).toDouble();
+  // Derived properties
+  double get remaining =>
+      (limit - used).clamp(0.0, double.infinity).toDouble();
+
+  double get percentage =>
+      limit <= 0 ? 0.0 : ((limit - used) / limit * 100).clamp(0.0, 100.0).toDouble();
+
+  double get remainingPercent => percentage;
 
   double get usageRatio =>
-      totalQuota <= 0 ? 0 : (usedQuota / totalQuota).clamp(0, 1).toDouble();
+      limit <= 0 ? 0.0 : (used / limit).clamp(0.0, 1.0).toDouble();
+
+  double get usagePercent => (usageRatio * 100).clamp(0.0, 100.0).toDouble();
+
+  // Backward-compatibility aliases
+  double get totalQuota => limit;
+  double get usedQuota => used;
+  double get remainingQuota => remaining;
+  DateTime get lastUpdated => fetchedAt;
+  Map<String, dynamic> get quotaData => rawData ?? const {};
 
   QuotaInfo copyWith({
     int? id,
     int? accountId,
-    double? totalQuota,
-    double? usedQuota,
+    double? limit,
+    double? used,
     String? unit,
     DateTime? fetchedAt,
     bool? isManual,
-  }) => QuotaInfo(
+    Map<String, dynamic>? rawData,
+  }) =>
+      QuotaInfo(
         id: id ?? this.id,
         accountId: accountId ?? this.accountId,
-        totalQuota: totalQuota ?? this.totalQuota,
-        usedQuota: usedQuota ?? this.usedQuota,
+        limit: limit ?? this.limit,
+        used: used ?? this.used,
         unit: unit ?? this.unit,
         fetchedAt: fetchedAt ?? this.fetchedAt,
         isManual: isManual ?? this.isManual,
+        rawData: rawData ?? this.rawData,
       );
-}
+
+  @override
+  String toString() =>
+      'QuotaInfo(id: $id, accountId: $accountId, used: $used, limit: $limit, remaining: $remaining $unit)';
+}
