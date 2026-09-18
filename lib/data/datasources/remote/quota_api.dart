@@ -1,22 +1,15 @@
 // lib/data/datasources/remote/quota_api.dart
 
 import 'package:dio/dio.dart';
-import 'service_adapters/anthropic_adapter.dart';
-import 'service_adapters/base_adapter.dart';
-import 'service_adapters/google_ai_adapter.dart';
-import 'service_adapters/grok_adapter.dart';
-import 'service_adapters/openai_adapter.dart';
+import 'service_adapters/service_adapters.dart';
 
 class QuotaApi {
-  final Map<String, BaseAdapter> _adapters;
+  final ServiceAdapterRegistry _registry;
 
-  QuotaApi(Dio dio)
-      : _adapters = {
-          'openai': OpenAiAdapter(dio),
-          'google': GoogleAiAdapter(dio),
-          'anthropic': AnthropicAdapter(dio),
-          'grok': GrokAdapter(dio),
-        };
+  QuotaApi([Dio? dio]) : _registry = ServiceAdapterRegistry(dio: dio);
 
-  BaseAdapter? adapterFor(String serviceType) => _adapters[serviceType];
-}
+  BaseAdapter? adapterFor(String serviceType) =>
+      _registry.forService(serviceType);
+
+  void dispose() => _registry.dispose();
+}
