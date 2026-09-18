@@ -21,34 +21,43 @@ class QuotaRepositoryImpl implements IQuotaRepository {
   Future<QuotaInfo?> refreshQuota(Account account) async {
     if (account.id == null) return null;
 
-    final adapter = _quotaApi.adapterFor(account.serviceType);
-    if (adapter == null) return null;
+    final adapter = _quotaApi.adapterFor(account.serviceId);
+    if (adapter == null) {
+      return _quotaDao.getLatestForAccount(account.id!);
+    }
 
     try {
       final fetched = await adapter.fetchQuota(account);
-      final id = await _quotaDao.insert(fetched);
-      return fetched.copyWith(id: id);
-    } on UnsupportedError {
-      // Provider has no quota API — fall back to the last known snapshot.
-      return _quotaDao.getLatest(account.id!);
+      if (fetched != null) {
+        final model = QuotaInfoModel.fromEntity(
+          fetched.copyWith(accountId: account.id),
+        );
+        final id = await _quotaDao.insertQuotaHistory(model);
+        return model.copyWith(id: id);
+      }
+      return _quotaDao.getLatestForAccount(account.id!);
     } catch (_) {
-      return _quotaDao.getLatest(account.id!);
+      return _quotaDao.getLatestForAccount(account.id!);
     }
   }
 
   @override
-  Future<List<QuotaInfo>> getQuotaHistory(int accountId) =>
-      _quotaDao.getHistory(accountId);
+  Future<List<QuotaInfo>> getQuotaHistory(int accountId) async {
+    final list = await _quotaDao.getQuotaHistoryForAccount(accountId);
+    return list.map((m) => m.toEntity()).toList();
+  }
 
   @override
-  Future<QuotaInfo?> getLatestQuota(int accountId) =>
-      _quotaDao.getLatest(accountId);
+  Future<QuotaInfo?> getLatestQuota(int accountId) async {
+    final latest = await _quotaDao.getLatestForAccount(accountId);
+    return latest?.toEntity();
+  }
 
   @override
   Future<void> updateManualQuota(int accountId, QuotaInfo info) async {
     final model = QuotaInfoModel.fromEntity(
       info.copyWith(accountId: accountId, isManual: true),
     );
-    await _quotaDao.insert(model);
+    await _quotaDao.insertQuotaHistory(model);
   }
-}
+}
