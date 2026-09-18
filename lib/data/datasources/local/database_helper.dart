@@ -1,5 +1,6 @@
 // lib/data/datasources/local/database_helper.dart
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -7,9 +8,10 @@ import 'package:sqflite/sqflite.dart';
 class DatabaseHelper {
   DatabaseHelper._internal();
   static final DatabaseHelper instance = DatabaseHelper._internal();
+  factory DatabaseHelper() => instance;
 
   static const String _dbName = 'quota_pilot.db';
-  static const int _dbVersion = 1;
+  static const int _dbVersion = 2;
 
   static const String tableAccounts = 'accounts';
   static const String tableQuotaHistory = 'quota_history';
@@ -24,12 +26,21 @@ class DatabaseHelper {
   }
 
   Future<Database> _open() async {
+    if (kIsWeb) {
+      // In web builds without sqlite3_flutter_libs ffi web worker,
+      // inMemoryDatabasePath is used so the app boots seamlessly.
+      return openDatabase(
+        inMemoryDatabasePath,
+        version: _dbVersion,
+        onCreate: _onCreate,
+      );
+    }
+
     final path = join(await getDatabasesPath(), _dbName);
     return openDatabase(
       path,
       version: _dbVersion,
       onConfigure: (db) async {
-        // Enforce FK constraints (quota_history.account_id -> accounts.id)
         await db.execute('PRAGMA foreign_keys = ON');
       },
       onCreate: _onCreate,
@@ -44,17 +55,21 @@ class DatabaseHelper {
         email TEXT NOT NULL,
         service_id TEXT NOT NULL,
         auth_type TEXT NOT NULL,
+        api_key TEXT,
+        base_url TEXT,
         auth_data TEXT,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        updated_at TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1
       )
     ''');
 
     await db.execute('''
       CREATE TABLE $tableQuotaHistory (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        account_id INTEGER,
+        account_id INTEGER NOT NULL,
         quota_data TEXT,
-        fetched_at TEXT,
+        fetched_at TEXT NOT NULL,
         FOREIGN KEY (account_id) REFERENCES $tableAccounts (id) ON DELETE CASCADE
       )
     ''');
@@ -63,35 +78,49 @@ class DatabaseHelper {
       CREATE TABLE $tableServiceDefinitions (
         id TEXT PRIMARY KEY,
         name TEXT,
-        logo_url TEXT,
         supports_api INTEGER,
         supports_manual INTEGER
       )
     ''');
 
-    // Helpful indexes for the most common query patterns.
     await db.execute(
-      'CREATE INDEX idx_accounts_service ON $tableAccounts (service_id)',
+      'CREATE INDEX IF NOT EXISTS idx_accounts_service ON $tableAccounts (service_id)',
     );
     await db.execute(
-      'CREATE INDEX idx_quota_account_time '
+      'CREATE INDEX IF NOT EXISTS idx_quota_account_time '
       'ON $tableQuotaHistory (account_id, fetched_at DESC)',
     );
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Migration hooks go here as the schema evolves.
+    if (oldVersion < 2) {
+      try {
+        await db.execute('ALTER TABLE $tableAccounts ADD COLUMN api_key TEXT');
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE $tableAccounts ADD COLUMN base_url TEXT');
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE $tableAccounts ADD COLUMN updated_at TEXT');
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE $tableAccounts ADD COLUMN is_active INTEGER DEFAULT 1');
+      } catch (_) {}
+    }
   }
 
-  /// For tests / logout flows.
   Future<void> close() async {
     await _db?.close();
     _db = null;
   }
 
   Future<void> deleteDatabaseFile() async {
+    if (kIsWeb) {
+      _db = null;
+      return;
+    }
     final path = join(await getDatabasesPath(), _dbName);
     await deleteDatabase(path);
     _db = null;
   }
-}
+}
