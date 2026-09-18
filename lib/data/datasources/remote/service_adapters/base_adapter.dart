@@ -1,9 +1,12 @@
 // lib/data/datasources/remote/service_adapters/base_adapter.dart
 
 import 'package:dio/dio.dart';
-import 'package:meta/meta.dart';
+import 'package:flutter/foundation.dart';
 
-import '../../../models/quota_info.dart';
+import '../../../../domain/entities/account.dart';
+import '../../../../domain/entities/quota_info.dart';
+
+typedef BaseAdapter = ServiceAdapter;
 
 /// Categories of failure that the UI layer can react to differently.
 enum QuotaErrorKind {
@@ -29,11 +32,8 @@ class QuotaFetchException implements Exception {
 }
 
 /// Contract implemented by every provider integration.
-///
-/// `fetchQuota` returns `null` when the service does **not** expose a machine
-/// readable usage endpoint (or when the API is reachable but no quota data is
-/// available). The UI is expected to fall back to manual entry in that case.
 abstract class ServiceAdapter {
+
   ServiceAdapter({Dio? dio})
       : _dio = dio ?? _buildDefaultDio(),
         _ownsDio = dio == null;
@@ -51,12 +51,7 @@ abstract class ServiceAdapter {
   bool get supportsManual;
 
   /// Returns the latest quota snapshot, or `null` to trigger manual entry.
-  ///
-  /// [credentials] is a free‑form bag per service, e.g. `{'apiKey': '...'}`.
-  /// Implementations must throw [QuotaFetchException] on hard failures.
-  Future<QuotaInfo?> fetchQuota({
-    required Map<String, dynamic> credentials,
-  });
+  Future<QuotaInfo?> fetchQuota(Account account);
 
   /// Releases the underlying HTTP client. Safe to call once.
   void dispose() {
@@ -64,6 +59,7 @@ abstract class ServiceAdapter {
       _dio.close(force: true);
     }
   }
+
 
   // ---------------------------------------------------------------------------
   // Shared helpers
@@ -189,6 +185,7 @@ abstract class ServiceAdapter {
           cause: e,
         );
       case DioExceptionType.unknown:
+      default:
         return QuotaFetchException(
           QuotaErrorKind.unknown,
           e.message ?? 'Unknown network error.',
