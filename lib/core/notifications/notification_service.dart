@@ -27,6 +27,10 @@ class NotificationService {
 
   Future<void> init() async {
     if (_initialised) return;
+    if (kIsWeb) {
+      _initialised = true;
+      return;
+    }
 
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const darwinInit = DarwinInitializationSettings(
@@ -79,6 +83,8 @@ class NotificationService {
   /// Requests OS-level notification permission.
   /// Call this when the user flips the Settings toggle ON.
   Future<bool> requestPermissions() async {
+    if (kIsWeb) return true;
+
     if (Platform.isAndroid) {
       final android = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
@@ -99,6 +105,8 @@ class NotificationService {
 
   /// Best-effort check whether notifications can currently be shown.
   Future<bool> areNotificationsEnabled() async {
+    if (kIsWeb) return true;
+
     try {
       if (Platform.isAndroid) {
         final android = _plugin.resolvePlatformSpecificImplementation<
@@ -113,6 +121,7 @@ class NotificationService {
       return false;
     }
   }
+
 
   // ---------------------------------------------------------------------------
   // Showing / cancelling
