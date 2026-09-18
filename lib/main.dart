@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'core/notifications/notification_service.dart';
 import 'presentation/providers/notification_providers.dart';
 import 'presentation/providers/settings_providers.dart';
 import 'presentation/screens/about_screen.dart';
@@ -97,10 +96,6 @@ class QuotaPilotApp extends ConsumerStatefulWidget {
 }
 
 class _QuotaPilotAppState extends ConsumerState<QuotaPilotApp> {
-  // Brand palette
-  static const Color _primary = Color(0xFF1A73E8);
-  static const Color _secondary = Color(0xFF34A853);
-
   @override
   void initState() {
     super.initState();
@@ -112,38 +107,70 @@ class _QuotaPilotAppState extends ConsumerState<QuotaPilotApp> {
 
   @override
   Widget build(BuildContext context) {
+    final settingsAsync = ref.watch(settingsProvider);
+    final settings = settingsAsync.valueOrNull;
     final themeMode = ref.watch(themeModeProvider);
+    final accent = settings?.accentPalette ?? AppAccentPalette.indigo;
+    final isOled = settings?.themeMode == AppThemeMode.oled;
+
+    final primaryColor = accent.primaryColor;
+    final secondaryColor = accent.secondaryColor;
 
     final ThemeData lightTheme = ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: _primary,
-        primary: _primary,
-        secondary: _secondary,
+        seedColor: primaryColor,
+        primary: primaryColor,
+        secondary: secondaryColor,
         brightness: Brightness.light,
       ),
-      scaffoldBackgroundColor: const Color(0xFFF7F9FC),
+      scaffoldBackgroundColor: const Color(0xFFF8FAFC),
       appBarTheme: const AppBarTheme(
         centerTitle: false,
         elevation: 0,
       ),
     );
 
-    final ThemeData darkTheme = ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: _primary,
-        primary: _primary,
-        secondary: _secondary,
-        brightness: Brightness.dark,
-      ),
-      appBarTheme: const AppBarTheme(
-        centerTitle: false,
-        elevation: 0,
-      ),
-    );
+    final ThemeData darkTheme = isOled
+        ? ThemeData(
+            useMaterial3: true,
+            brightness: Brightness.dark,
+            scaffoldBackgroundColor: Colors.black,
+            canvasColor: Colors.black,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: primaryColor,
+              primary: primaryColor,
+              secondary: secondaryColor,
+              surface: const Color(0xFF0A0A0A),
+              brightness: Brightness.dark,
+            ),
+            cardTheme: const CardThemeData(
+              color: Color(0xFF111111),
+            ),
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Colors.black,
+              centerTitle: false,
+              elevation: 0,
+            ),
+          )
+        : ThemeData(
+            useMaterial3: true,
+            brightness: Brightness.dark,
+            scaffoldBackgroundColor: const Color(0xFF0B0F19),
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: primaryColor,
+              primary: primaryColor,
+              secondary: secondaryColor,
+              surface: const Color(0xFF151C2C),
+              brightness: Brightness.dark,
+            ),
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Color(0xFF0B0F19),
+              centerTitle: false,
+              elevation: 0,
+            ),
+          );
 
     return MaterialApp.router(
       title: 'QuotaPilot',
