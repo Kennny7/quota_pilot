@@ -1,62 +1,66 @@
 // lib/data/models/service_definition.dart
 
-class ServiceDefinition {
-  final String id;
-  final String name;
-  final String? logoUrl;
-  final bool supportsApi;
-  final bool supportsManual;
+import '../../domain/entities/service_definition.dart';
 
-  const ServiceDefinition({
-    required this.id,
-    required this.name,
-    this.logoUrl,
-    required this.supportsApi,
-    required this.supportsManual,
+class ServiceDefinitionModel extends ServiceDefinition {
+  const ServiceDefinitionModel({
+    required super.id,
+    required super.name,
+    super.supportsApiKey = true,
+    super.supportsManual = true,
+    super.quotaUnit = 'requests',
+    super.docsUrl = '',
+    super.description = '',
+    super.colorHex = '#2563EB',
+    super.badge,
   });
 
-  ServiceDefinition copyWith({
-    String? id,
-    String? name,
-    String? logoUrl,
-    bool? supportsApi,
-    bool? supportsManual,
-  }) {
-    return ServiceDefinition(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      logoUrl: logoUrl ?? this.logoUrl,
-      supportsApi: supportsApi ?? this.supportsApi,
-      supportsManual: supportsManual ?? this.supportsManual,
+  factory ServiceDefinitionModel.fromEntity(ServiceDefinition s) {
+    if (s is ServiceDefinitionModel) return s;
+    return ServiceDefinitionModel(
+      id: s.id,
+      name: s.name,
+      supportsApiKey: s.supportsApiKey,
+      supportsManual: s.supportsManual,
+      quotaUnit: s.quotaUnit,
+      docsUrl: s.docsUrl,
+      description: s.description,
+      colorHex: s.colorHex,
+      badge: s.badge,
     );
   }
 
-  /// ---------- JSON (remote / domain transport) ----------
-  factory ServiceDefinition.fromJson(Map<String, dynamic> json) {
-    return ServiceDefinition(
+  factory ServiceDefinitionModel.fromJson(Map<String, dynamic> json) {
+    return ServiceDefinitionModel(
       id: json['id'] as String,
       name: json['name'] as String? ?? '',
-      logoUrl: json['logo_url'] as String?,
-      supportsApi: _toBool(json['supports_api']),
-      supportsManual: _toBool(json['supports_manual']),
+      supportsApiKey: _toBool(json['supports_api'] ?? json['supportsApiKey']),
+      supportsManual: _toBool(json['supports_manual'] ?? json['supportsManual']),
+      quotaUnit: json['quota_unit'] as String? ?? json['quotaUnit'] as String? ?? 'requests',
+      docsUrl: json['docs_url'] as String? ?? json['docsUrl'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      colorHex: json['color_hex'] as String? ?? json['colorHex'] as String? ?? '#2563EB',
+      badge: json['badge'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
-        'logo_url': logoUrl,
-        'supports_api': supportsApi ? 1 : 0,
+        'supports_api': supportsApiKey ? 1 : 0,
         'supports_manual': supportsManual ? 1 : 0,
+        'quota_unit': quotaUnit,
+        'docs_url': docsUrl,
+        'description': description,
+        'color_hex': colorHex,
+        if (badge != null) 'badge': badge,
       };
 
-  /// ---------- SQLite row mapping ----------
-  factory ServiceDefinition.fromMap(Map<String, dynamic> map) {
-    return ServiceDefinition(
+  factory ServiceDefinitionModel.fromMap(Map<String, dynamic> map) {
+    return ServiceDefinitionModel(
       id: map['id'] as String,
       name: map['name'] as String? ?? '',
-      logoUrl: map['logo_url'] as String?,
-      supportsApi: _toBool(map['supports_api']),
+      supportsApiKey: _toBool(map['supports_api']),
       supportsManual: _toBool(map['supports_manual']),
     );
   }
@@ -64,8 +68,7 @@ class ServiceDefinition {
   Map<String, dynamic> toMap() => {
         'id': id,
         'name': name,
-        'logo_url': logoUrl,
-        'supports_api': supportsApi ? 1 : 0,
+        'supports_api': supportsApiKey ? 1 : 0,
         'supports_manual': supportsManual ? 1 : 0,
       };
 
@@ -75,7 +78,4 @@ class ServiceDefinition {
     if (v is String) return v == '1' || v.toLowerCase() == 'true';
     return false;
   }
-
-  @override
-  String toString() => 'ServiceDefinition(id: $id, name: $name)';
-}
+}
