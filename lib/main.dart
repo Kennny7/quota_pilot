@@ -1,122 +1,157 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-void main() {
-  runApp(const MyApp());
+import 'core/notifications/notification_service.dart';
+import 'presentation/providers/notification_providers.dart';
+import 'presentation/providers/settings_providers.dart';
+import 'presentation/screens/about_screen.dart';
+import 'presentation/screens/account_detail_screen.dart';
+import 'presentation/screens/add_account_screen.dart';
+import 'presentation/screens/donate_screen.dart';
+import 'presentation/screens/home_screen.dart';
+import 'presentation/screens/settings_screen.dart';
+import 'presentation/screens/splash_screen.dart';
+import 'presentation/screens/terms_screen.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // SharedPreferences is needed synchronously by `ProviderScope` to construct
+  // `SettingsRepositoryImpl`, so it has to be awaited before `runApp`.
+  final prefs = await SharedPreferences.getInstance();
+
+  // Must complete before the first notification can be shown — otherwise the
+  // scheduler may try to post through an uninitialised channel.
+  await NotificationService.instance.init();
+
+  // TODO: initialize DatabaseHelper, secure storage, PackageInfo, etc.
+
+  runApp(
+    ProviderScope(
+      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      child: const QuotaPilotApp(),
+    ),
+  );
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+/// App-wide router.
+final GoRouter appRouter = GoRouter(
+  initialLocation: '/splash',
+  debugLogDiagnostics: true,
+  routes: <RouteBase>[
+    GoRoute(
+      path: '/splash',
+      name: 'splash',
+      builder: (context, state) => const SplashScreen(),
+    ),
+    GoRoute(
+      path: '/home',
+      name: 'home',
+      builder: (context, state) => const HomeScreen(),
+    ),
+    GoRoute(
+      path: '/add-account',
+      name: 'add-account',
+      builder: (context, state) => const AddAccountScreen(),
+    ),
+    GoRoute(
+      path: '/account-detail/:id',
+      name: 'account-detail',
+      builder: (context, state) {
+        final id = state.pathParameters['id'] ?? '';
+        return AccountDetailScreen(id: id);
+      },
+    ),
+    GoRoute(
+      path: '/settings',
+      name: 'settings',
+      builder: (context, state) => const SettingsScreen(),
+    ),
+    GoRoute(
+      path: '/about',
+      name: 'about',
+      builder: (context, state) => const AboutScreen(),
+    ),
+    GoRoute(
+      path: '/terms',
+      name: 'terms',
+      builder: (context, state) => const TermsScreen(),
+    ),
+    GoRoute(
+      path: '/donate',
+      name: 'donate',
+      builder: (context, state) => const DonateScreen(),
+    ),
+  ],
+);
 
-  // This widget is the root of your application.
+class QuotaPilotApp extends ConsumerStatefulWidget {
+  const QuotaPilotApp({super.key});
+
+  @override
+  ConsumerState<QuotaPilotApp> createState() => _QuotaPilotAppState();
+}
+
+class _QuotaPilotAppState extends ConsumerState<QuotaPilotApp> {
+  // Brand palette
+  static const Color _primary = Color(0xFF1A73E8);
+  static const Color _secondary = Color(0xFF34A853);
+
+  @override
+  void initState() {
+    super.initState();
+    // Reading the provider constructs it and its dependencies, which starts
+    // the scheduler. Teardown is handled by `ref.onDispose` inside the
+    // provider, so we don't need to hold the value.
+    ref.read(quotaAlertSchedulerProvider);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+    final themeMode = ref.watch(themeModeProvider);
+
+    final ThemeData lightTheme = ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: _primary,
+        primary: _primary,
+        secondary: _secondary,
+        brightness: Brightness.light,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      scaffoldBackgroundColor: const Color(0xFFF7F9FC),
+      appBarTheme: const AppBarTheme(
+        centerTitle: false,
+        elevation: 0,
+      ),
     );
-  }
-}
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+    final ThemeData darkTheme = ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: _primary,
+        primary: _primary,
+        secondary: _secondary,
+        brightness: Brightness.dark,
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
+      appBarTheme: const AppBarTheme(
+        centerTitle: false,
+        elevation: 0,
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
+    );
+
+    return MaterialApp.router(
+      title: 'QuotaPilot',
+      debugShowCheckedModeBanner: false,
+      theme: lightTheme,
+      darkTheme: darkTheme,
+      themeMode: themeMode,
+      routerConfig: appRouter,
     );
   }
 }
