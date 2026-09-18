@@ -24,6 +24,11 @@ quota_pilot/
 │   │   ├── network/
 │   │   │   ├── dio_client.dart
 │   │   │   └── network_info.dart
+│   │   ├── notifications/
+│   │   │   ├── notification_providers.dart
+│   │   │   ├── notification_service.dart
+│   │   │   ├── quota_alert_scheduler.dart
+│   │   │   └── quota_alert_service.dart
 │   │   ├── utils/
 │   │   │   ├── date_formatter.dart
 │   │   │   └── validators.dart
