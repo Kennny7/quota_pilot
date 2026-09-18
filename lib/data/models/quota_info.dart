@@ -1,154 +1,135 @@
 // lib/data/models/quota_info.dart
 
-// lib/data/models/quota_info.dart
-
 import 'dart:convert';
 
-import 'package:meta/meta.dart';
+import '../../domain/entities/quota_info.dart';
 
-@immutable
-class QuotaInfo {
-  final int? id;
-  final int accountId;
+class QuotaInfoModel extends QuotaInfo {
+  const QuotaInfoModel({
+    super.id,
+    required super.accountId,
+    required super.limit,
+    required super.used,
+    required super.unit,
+    required super.fetchedAt,
+    super.isManual = false,
+    super.rawData,
+  });
 
-  final Map<String, dynamic>? _quotaData;
-  final DateTime? _fetchedAt;
-  final DateTime? _lastUpdated;
-
-  final double? remaining;
-  final double? limit;
-  final double? usagePercent;
-
-  final Map<String, dynamic>? _raw;
-
-  const QuotaInfo({
-    this.id,
-    this.accountId = 0,
-    Map<String, dynamic>? quotaData,
-    DateTime? fetchedAt,
-    DateTime? lastUpdated,
-    this.remaining,
-    this.limit,
-    this.usagePercent,
-    Map<String, dynamic>? raw,
-  })  : _quotaData = quotaData,
-        _fetchedAt = fetchedAt,
-        _lastUpdated = lastUpdated,
-        _raw = raw;
-
-  Map<String, dynamic> get quotaData =>
-      _quotaData ?? _raw ?? const <String, dynamic>{};
-
-  Map<String, dynamic>? get raw => _raw ?? _quotaData;
-
-  DateTime get fetchedAt =>
-      _fetchedAt ??
-      _lastUpdated ??
-      DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-
-  DateTime get lastUpdated =>
-      _lastUpdated ??
-      _fetchedAt ??
-      DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-
-  QuotaInfo copyWith({
-    int? id,
-    int? accountId,
-    Map<String, dynamic>? quotaData,
-    DateTime? fetchedAt,
-    DateTime? lastUpdated,
-    double? remaining,
-    double? limit,
-    double? usagePercent,
-    Map<String, dynamic>? raw,
-  }) {
-    return QuotaInfo(
-      id: id ?? this.id,
-      accountId: accountId ?? this.accountId,
-      quotaData: quotaData ?? this.quotaData,
-      fetchedAt: fetchedAt ?? this.fetchedAt,
-      lastUpdated: lastUpdated ?? this.lastUpdated,
-      remaining: remaining ?? this.remaining,
-      limit: limit ?? this.limit,
-      usagePercent: usagePercent ?? this.usagePercent,
-      raw: raw ?? this.raw,
+  factory QuotaInfoModel.fromEntity(QuotaInfo q) {
+    if (q is QuotaInfoModel) return q;
+    return QuotaInfoModel(
+      id: q.id,
+      accountId: q.accountId,
+      limit: q.limit,
+      used: q.used,
+      unit: q.unit,
+      fetchedAt: q.fetchedAt,
+      isManual: q.isManual,
+      rawData: q.rawData,
     );
   }
 
-  /// ---------- JSON (remote / domain transport) ----------
-  factory QuotaInfo.fromJson(Map<String, dynamic> json) {
-    final fetchedAtRaw = json['fetched_at'] ?? json['last_updated'];
-    final lastUpdatedRaw = json['last_updated'] ?? json['fetched_at'];
+  QuotaInfo toEntity() => QuotaInfo(
+        id: id,
+        accountId: accountId,
+        limit: limit,
+        used: used,
+        unit: unit,
+        fetchedAt: fetchedAt,
+        isManual: isManual,
+        rawData: rawData,
+      );
 
-    return QuotaInfo(
+  factory QuotaInfoModel.fromJson(Map<String, dynamic> json) {
+    final accountId = (json['account_id'] as int?) ??
+        (json['accountId'] as int?) ??
+        0;
+    final limit = _toDouble(json['limit'] ?? json['total_quota'] ?? json['totalQuota']) ?? 100.0;
+    final used = _toDouble(json['used'] ?? json['used_quota'] ?? json['usedQuota']) ?? 0.0;
+    final unit = json['unit'] as String? ?? 'requests';
+    final fetchedAtRaw = json['fetched_at'] ?? json['last_updated'] ?? json['fetchedAt'];
+    final fetchedAt = fetchedAtRaw is String
+        ? DateTime.parse(fetchedAtRaw)
+        : DateTime.now();
+    final isManual = json['is_manual'] == 1 || json['isManual'] == true;
+
+    return QuotaInfoModel(
       id: json['id'] as int?,
-      accountId: (json['account_id'] as int?) ?? 0,
-      quotaData: _decodeMap(json['quota_data'] ?? json['raw']),
-      raw: json.containsKey('raw') ? _decodeMap(json['raw']) : null,
-      fetchedAt:
-          fetchedAtRaw is String ? DateTime.parse(fetchedAtRaw) : null,
-      lastUpdated:
-          lastUpdatedRaw is String ? DateTime.parse(lastUpdatedRaw) : null,
-      remaining: _toDouble(json['remaining']),
-      limit: _toDouble(json['limit']),
-      usagePercent: _toDouble(json['usage_percent'] ?? json['usagePercent']),
+      accountId: accountId,
+      limit: limit,
+      used: used,
+      unit: unit,
+      fetchedAt: fetchedAt,
+      isManual: isManual,
+      rawData: _decodeMap(json['quota_data'] ?? json['raw'] ?? json['rawData']),
     );
   }
 
   Map<String, dynamic> toJson() => {
         if (id != null) 'id': id,
         'account_id': accountId,
-        'quota_data': jsonEncode(quotaData),
+        'limit': limit,
+        'used': used,
+        'unit': unit,
         'fetched_at': fetchedAt.toIso8601String(),
-        'last_updated': lastUpdated.toIso8601String(),
-        if (remaining != null) 'remaining': remaining,
-        if (limit != null) 'limit': limit,
-        if (usagePercent != null) 'usage_percent': usagePercent,
-        if (_raw != null) 'raw': _raw,
+        'is_manual': isManual ? 1 : 0,
+        if (rawData != null) 'quota_data': jsonEncode(rawData),
       };
 
-  /// ---------- SQLite row mapping ----------
-  factory QuotaInfo.fromMap(Map<String, dynamic> map) {
-    final fetchedAtRaw = map['fetched_at'] ?? map['last_updated'];
-    final lastUpdatedRaw = map['last_updated'] ?? map['fetched_at'];
+  factory QuotaInfoModel.fromMap(Map<String, dynamic> map) {
+    final accountId = (map['account_id'] as int?) ?? 0;
+    final rawData = _decodeMap(map['quota_data']);
 
-    return QuotaInfo(
+    // Check if limit / used were stored as explicit columns or in quota_data
+    final limit = _toDouble(map['limit'] ?? rawData['limit']) ?? 100.0;
+    final used = _toDouble(map['used'] ?? rawData['used']) ?? 0.0;
+    final unit = map['unit'] as String? ?? (rawData['unit'] as String?) ?? 'requests';
+    final fetchedAtRaw = map['fetched_at'] as String?;
+    final fetchedAt = fetchedAtRaw != null
+        ? DateTime.parse(fetchedAtRaw)
+        : DateTime.now();
+    final isManual = map['is_manual'] == 1;
+
+    return QuotaInfoModel(
       id: map['id'] as int?,
-      accountId: (map['account_id'] as int?) ?? 0,
-      quotaData: _decodeMap(map['quota_data'] ?? map['raw']),
-      raw: map.containsKey('raw') ? _decodeMap(map['raw']) : null,
-      fetchedAt:
-          fetchedAtRaw is String ? DateTime.parse(fetchedAtRaw) : null,
-      lastUpdated:
-          lastUpdatedRaw is String ? DateTime.parse(lastUpdatedRaw) : null,
-      remaining: _toDouble(map['remaining']),
-      limit: _toDouble(map['limit']),
-      usagePercent: _toDouble(map['usage_percent'] ?? map['usagePercent']),
+      accountId: accountId,
+      limit: limit,
+      used: used,
+      unit: unit,
+      fetchedAt: fetchedAt,
+      isManual: isManual,
+      rawData: rawData,
     );
   }
 
-  Map<String, dynamic> toMap({bool includeId = false}) => {
-        if (includeId && id != null) 'id': id,
-        'account_id': accountId,
-        'quota_data': jsonEncode(quotaData),
-        'fetched_at': fetchedAt.toIso8601String(),
-        'last_updated': lastUpdated.toIso8601String(),
-        if (remaining != null) 'remaining': remaining,
-        if (limit != null) 'limit': limit,
-        if (usagePercent != null) 'usage_percent': usagePercent,
-        if (_raw != null) 'raw': jsonEncode(_raw),
-      };
+  Map<String, dynamic> toMap({bool includeId = false}) {
+    final mapData = <String, dynamic>{
+      'used': used,
+      'limit': limit,
+      'unit': unit,
+      'isManual': isManual,
+      ...?rawData,
+    };
+
+    return {
+      if (includeId && id != null) 'id': id,
+      'account_id': accountId,
+      'quota_data': jsonEncode(mapData),
+      'fetched_at': fetchedAt.toIso8601String(),
+    };
+  }
 
   static Map<String, dynamic> _decodeMap(dynamic raw) {
     if (raw == null) return {};
     if (raw is Map<String, dynamic>) return raw;
     if (raw is Map) return Map<String, dynamic>.from(raw);
-    if (raw is String && raw.isEmpty) return {};
-    if (raw is String) {
-      final decoded = jsonDecode(raw);
-      if (decoded is Map<String, dynamic>) return decoded;
-      if (decoded is Map) return Map<String, dynamic>.from(decoded);
-      return {};
+    if (raw is String && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) return decoded;
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      } catch (_) {}
     }
     return {};
   }
@@ -159,11 +140,4 @@ class QuotaInfo {
     if (value is String) return double.tryParse(value);
     return null;
   }
-
-  @override
-  String toString() =>
-      'QuotaInfo(id: $id, accountId: $accountId, '
-      'remaining: $remaining, limit: $limit, '
-      'usagePercent: $usagePercent, fetchedAt: $fetchedAt, '
-      'lastUpdated: $lastUpdated)';
-}
+}
