@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../domain/entities/user_settings.dart';
 import '../providers/settings_providers.dart';
 import '../widgets/quota_alert_settings_section.dart';
 import 'about_screen.dart';
@@ -15,7 +14,8 @@ class SettingsScreen extends ConsumerWidget {
   static String _themeLabel(AppThemeMode mode) => switch (mode) {
         AppThemeMode.system => 'System default',
         AppThemeMode.light => 'Light',
-        AppThemeMode.dark => 'Dark',
+        AppThemeMode.dark => 'Dark Nebula',
+        AppThemeMode.oled => 'OLED Pitch Black',
       };
 
   Future<void> _pickTheme(
@@ -47,6 +47,39 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _pickAccentPalette(
+    BuildContext context,
+    WidgetRef ref,
+    AppAccentPalette current,
+  ) async {
+    final selected = await showDialog<AppAccentPalette>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Accent Palette'),
+        children: [
+          for (final palette in AppAccentPalette.values)
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: palette.primaryColor,
+                radius: 12,
+              ),
+              title: Text(palette.label),
+              trailing: palette == current
+                  ? Icon(
+                      Icons.check,
+                      color: Theme.of(dialogContext).colorScheme.primary,
+                    )
+                  : null,
+              onTap: () => Navigator.of(dialogContext).pop(palette),
+            ),
+        ],
+      ),
+    );
+    if (selected != null) {
+      await ref.read(settingsProvider.notifier).setAccentPalette(selected);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settingsAsync = ref.watch(settingsProvider);
@@ -66,6 +99,17 @@ class SettingsScreen extends ConsumerWidget {
               subtitle: Text(_themeLabel(settings.themeMode)),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _pickTheme(context, ref, settings.themeMode),
+            ),
+            ListTile(
+              leading: const Icon(Icons.color_lens_outlined),
+              title: const Text('Accent Palette'),
+              subtitle: Text(settings.accentPalette.label),
+              trailing: CircleAvatar(
+                backgroundColor: settings.accentPalette.primaryColor,
+                radius: 10,
+              ),
+              onTap: () =>
+                  _pickAccentPalette(context, ref, settings.accentPalette),
             ),
             const Divider(),
             const _SectionHeader('Notifications'),
