@@ -1,61 +1,77 @@
-// lib/domain/entities/user_settings.dart
+// lib/data/models/user_settings.dart
 
-class UserSettings {
-  const UserSettings({
-    this.darkMode = false,
-    this.autoRefresh = true,
-    this.refreshIntervalMinutes = 30,
-    this.locale = 'en',
-    this.quotaAlertsEnabled = true,
-    this.quotaAlertThreshold = 20, // percent, 1..100
+import '../../core/constants/app_colors.dart';
+import '../../domain/entities/user_settings.dart';
+
+class UserSettingsModel extends UserSettings {
+  const UserSettingsModel({
+    super.themeMode = AppThemeMode.system,
+    super.accentPalette = AppAccentPalette.indigo,
+    super.quotaAlertsEnabled = true,
+    super.quotaAlertThreshold = 20,
+    super.autoRefresh = true,
+    super.refreshIntervalMinutes = 30,
+    super.locale = 'en',
+    super.isSupporter = false,
   });
 
-  final bool darkMode;
-  final bool autoRefresh;
-  final int refreshIntervalMinutes;
-  final String locale;
-
-  /// Whether local notifications are enabled for low quota.
-  final bool quotaAlertsEnabled;
-
-  /// Percentage (1–100) below which we notify.
-  final int quotaAlertThreshold;
-
-  UserSettings copyWith({
-    bool? darkMode,
-    bool? autoRefresh,
-    int? refreshIntervalMinutes,
-    String? locale,
-    bool? quotaAlertsEnabled,
-    int? quotaAlertThreshold,
-  }) {
-    return UserSettings(
-      darkMode: darkMode ?? this.darkMode,
-      autoRefresh: autoRefresh ?? this.autoRefresh,
-      refreshIntervalMinutes:
-          refreshIntervalMinutes ?? this.refreshIntervalMinutes,
-      locale: locale ?? this.locale,
-      quotaAlertsEnabled: quotaAlertsEnabled ?? this.quotaAlertsEnabled,
-      quotaAlertThreshold: quotaAlertThreshold ?? this.quotaAlertThreshold,
+  factory UserSettingsModel.fromEntity(UserSettings s) {
+    if (s is UserSettingsModel) return s;
+    return UserSettingsModel(
+      themeMode: s.themeMode,
+      accentPalette: s.accentPalette,
+      quotaAlertsEnabled: s.quotaAlertsEnabled,
+      quotaAlertThreshold: s.quotaAlertThreshold,
+      autoRefresh: s.autoRefresh,
+      refreshIntervalMinutes: s.refreshIntervalMinutes,
+      locale: s.locale,
+      isSupporter: s.isSupporter,
     );
   }
 
   Map<String, dynamic> toJson() => {
+        'themeMode': themeMode.name,
+        'accentPalette': accentPalette.name,
         'darkMode': darkMode,
         'autoRefresh': autoRefresh,
         'refreshIntervalMinutes': refreshIntervalMinutes,
         'locale': locale,
         'quotaAlertsEnabled': quotaAlertsEnabled,
         'quotaAlertThreshold': quotaAlertThreshold,
+        'isSupporter': isSupporter,
       };
 
-  factory UserSettings.fromJson(Map<String, dynamic> json) => UserSettings(
-        darkMode: json['darkMode'] as bool? ?? false,
-        autoRefresh: json['autoRefresh'] as bool? ?? true,
-        refreshIntervalMinutes:
-            json['refreshIntervalMinutes'] as int? ?? 30,
-        locale: json['locale'] as String? ?? 'en',
-        quotaAlertsEnabled: json['quotaAlertsEnabled'] as bool? ?? true,
-        quotaAlertThreshold: json['quotaAlertThreshold'] as int? ?? 20,
-      );
-}
+  factory UserSettingsModel.fromJson(Map<String, dynamic> json) {
+    AppThemeMode parseTheme(dynamic val) {
+      if (val is String) {
+        return AppThemeMode.values.firstWhere(
+          (m) => m.name == val,
+          orElse: () => AppThemeMode.system,
+        );
+      }
+      if (json['darkMode'] == true) return AppThemeMode.dark;
+      return AppThemeMode.system;
+    }
+
+    AppAccentPalette parseAccent(dynamic val) {
+      if (val is String) {
+        return AppAccentPalette.values.firstWhere(
+          (a) => a.name == val,
+          orElse: () => AppAccentPalette.indigo,
+        );
+      }
+      return AppAccentPalette.indigo;
+    }
+
+    return UserSettingsModel(
+      themeMode: parseTheme(json['themeMode']),
+      accentPalette: parseAccent(json['accentPalette']),
+      quotaAlertsEnabled: json['quotaAlertsEnabled'] as bool? ?? true,
+      quotaAlertThreshold: json['quotaAlertThreshold'] as int? ?? 20,
+      autoRefresh: json['autoRefresh'] as bool? ?? true,
+      refreshIntervalMinutes: json['refreshIntervalMinutes'] as int? ?? 30,
+      locale: json['locale'] as String? ?? 'en',
+      isSupporter: json['isSupporter'] as bool? ?? false,
+    );
+  }
+}
