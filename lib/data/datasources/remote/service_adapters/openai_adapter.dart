@@ -1,12 +1,9 @@
 // lib/data/datasources/remote/service_adapters/openai_adapter.dart
 
-import '../../../models/quota_info.dart';
+import '../../../../domain/entities/account.dart';
+import '../../../../domain/entities/quota_info.dart';
 import 'base_adapter.dart';
 
-/// OpenAI exposes a *usage* endpoint but **not** a plan‑limit endpoint, so the
-/// caller may pass an optional `monthlyLimit` (tokens) in [credentials] to let
-/// us compute `remaining` / `usagePercent`. When it is absent we still return a
-/// [QuotaInfo] with the raw usage figures, leaving the derived fields `null`.
 class OpenAiAdapter extends ServiceAdapter {
   OpenAiAdapter({super.dio});
 
@@ -22,58 +19,60 @@ class OpenAiAdapter extends ServiceAdapter {
   bool get supportsManual => true;
 
   @override
-  Future<QuotaInfo?> fetchQuota({
-    required Map<String, dynamic> credentials,
-  }) async {
-    final apiKey = requireString(
-      credentials,
-      'apiKey',
-      message: 'An OpenAI API key is required.',
-    );
-
-    final date = _formatDate(
-      credentials['date'] as DateTime? ?? DateTime.now(),
-    );
-
-    final payload = await getJson(
-      '$_baseUrl/usage',
-      query: {'date': date},
-      headers: {'Authorization': 'Bearer $apiKey'},
-    );
-
-    final data = payload['data'];
-    if (data is! List) {
+  Future<QuotaInfo?> fetchQuota(Account account) async {
+    final apiKey = account.apiKey?.trim();
+    if (apiKey == null || apiKey.isEmpty) {
       throw const QuotaFetchException(
-        QuotaErrorKind.parse,
-        'OpenAI usage payload did not contain a "data" list.',
+        QuotaErrorKind.unauthorized,
+        'An OpenAI API key is required.',
       );
     }
 
-    double usedTokens = 0;
-    double requestCount = 0;
+    final date = _formatDate(DateTime.now());
 
-    for (final entry in data) {
-      if (entry is! Map) continue;
-      usedTokens += _asDouble(entry['n_context_tokens_total']);
-      usedTokens += _asDouble(entry['n_generated_tokens_total']);
-      requestCount += _asDouble(entry['n_requests']);
+    try {
+      final payload = await getJson(
+        '$_baseUrl/usage',
+        query: {'date': date},
+        headers: {'Authorization': 'Bearer $apiKey'},
+      );
+
+      final data = payload['data'];
+      double usedTokens = 0;
+      double requestCount = 0;
+
+      if (data is List) {
+        for (final entry in data) {
+          if (entry is! Map) continue;
+          usedTokens += _asDouble(entry['n_context_tokens_total']);
+          usedTokens += _asDouble(entry['n_generated_tokens_total']);
+          requestCount += _asDouble(entry['n_requests']);
+        }
+      }
+
+      // Default monthly token allowance or declared limit
+      final limit = _asDouble(account.authData['monthlyLimit']) > 0
+          ? _asDouble(account.authData['monthlyLimit'])
+          : 500000.0;
+
+      return QuotaInfo(
+        accountId: account.id ?? 0,
+        limit: limit,
+        used: usedTokens,
+        unit: 'tokens',
+        fetchedAt: DateTime.now(),
+        rawData: {
+          'usedTokens': usedTokens,
+          'requests': requestCount,
+          'date': date,
+        },
+      );
+    } on QuotaFetchException {
+      rethrow;
+    } catch (e) {
+      // Return null so UI falls back gracefully to manual
+      return null;
     }
-
-    final declaredLimit = _asDouble(credentials['monthlyLimit']);
-    final limit = declaredLimit > 0 ? declaredLimit : null;
-
-    return QuotaInfo(
-      limit: limit,
-      remaining: limit != null ? (limit - usedTokens).clamp(0, limit) : null,
-      usagePercent: computeUsagePercent(usedTokens, limit),
-      lastUpdated: DateTime.now(),
-      raw: {
-        'usedTokens': usedTokens,
-        'requests': requestCount,
-        'date': date,
-        'entries': data.length,
-      },
-    );
   }
 
   double _asDouble(Object? value) {
@@ -88,4 +87,4 @@ class OpenAiAdapter extends ServiceAdapter {
     final d = date.day.toString().padLeft(2, '0');
     return '$y-$m-$d';
   }
-}
+}
