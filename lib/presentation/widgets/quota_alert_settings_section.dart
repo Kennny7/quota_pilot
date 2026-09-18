@@ -2,11 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../domain/entities/user_settings.dart';
+import '../providers/notification_providers.dart';
 import '../providers/settings_providers.dart';
 
-/// Slider bounds. Deliberately narrower than the entity's documented 1–100:
-/// sub-5% alerts are noise, 90%+ fires on essentially every account.
 const int _kMinThreshold = 5;
 const int _kMaxThreshold = 90;
 const int _kThresholdStep = 5;
@@ -14,20 +12,13 @@ const int _kThresholdStep = 5;
 class QuotaAlertSettingsSection extends ConsumerWidget {
   const QuotaAlertSettingsSection({super.key, required this.settings});
 
-  /// The parent screen already has this from its own `settingsProvider`
-  /// watch — passing it in avoids a second subscription and keeps this
-  /// widget's rebuilds tied to the caller's.
   final UserSettings settings;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(settingsProvider.notifier);
-
-    // Guard against a stored value outside the slider range — an old write,
-    // or the entity default of 20 surviving a slider range change. Slider
-    // asserts if `value` falls outside [min, max].
-    final threshold = settings.quotaAlertThreshold
-        .clamp(_kMinThreshold, _kMaxThreshold);
+    final threshold =
+        settings.quotaAlertThreshold.clamp(_kMinThreshold, _kMaxThreshold);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -41,7 +32,7 @@ class QuotaAlertSettingsSection extends ConsumerWidget {
           value: settings.quotaAlertsEnabled,
           onChanged: (value) => notifier.setQuotaAlertsEnabled(value),
         ),
-        if (settings.quotaAlertsEnabled)
+        if (settings.quotaAlertsEnabled) ...[
           ListTile(
             title: Text('Alert threshold: $threshold%'),
             subtitle: Slider(
@@ -54,7 +45,23 @@ class QuotaAlertSettingsSection extends ConsumerWidget {
                   notifier.setQuotaAlertThreshold(value.round()),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                await ref.read(quotaAlertServiceProvider).sendTestAlert();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Test notification triggered.')),
+                  );
+                }
+              },
+              icon: const Icon(Icons.send_outlined, size: 16),
+              label: const Text('Send Test Alert'),
+            ),
+          ),
+        ],
       ],
     );
   }
-}
+}
