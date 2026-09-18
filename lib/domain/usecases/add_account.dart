@@ -7,5 +7,5 @@ class AddAccount {
   final IAccountRepository _repository;
   AddAccount(this._repository);
 
-  Future<void> call(Account account) => _repository.addAccount(account);
-}
+  Future<int> call(Account account) => _repository.addAccount(account);
+}
