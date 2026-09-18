@@ -3,33 +3,27 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../data/repositories/account_repository.dart';
-import '../../data/repositories/quota_repository.dart';
-import '../../data/repositories/settings_repository.dart';
+import '../../domain/repositories/i_account_repository.dart';
+import '../../domain/repositories/i_quota_repository.dart';
+import '../../domain/repositories/i_settings_repository.dart';
 import 'notification_service.dart';
 
 /// Checks every account's cached quota and fires a local notification for any
 /// account that has dropped at or below the user's configured threshold.
-///
-/// Design notes:
-///  * Reads the *cached* quota from the local DB — no network calls, so this
-///    is safe to run on every app start / resume.
-///  * Throttles per-account so we don't re-notify on every resume. The
-///    throttle window is [_minIntervalBetweenAlerts].
 class QuotaAlertService {
   QuotaAlertService({
-    required AccountRepository accountRepository,
-    required QuotaRepository quotaRepository,
-    required SettingsRepository settingsRepository,
+    required IAccountRepository accountRepository,
+    required IQuotaRepository quotaRepository,
+    required ISettingsRepository settingsRepository,
     NotificationService? notifications,
   })  : _accounts = accountRepository,
         _quotas = quotaRepository,
         _settings = settingsRepository,
         _notifications = notifications ?? NotificationService.instance;
 
-  final AccountRepository _accounts;
-  final QuotaRepository _quotas;
-  final SettingsRepository _settings;
+  final IAccountRepository _accounts;
+  final IQuotaRepository _quotas;
+  final ISettingsRepository _settings;
   final NotificationService _notifications;
 
   static const String _prefsPrefix = 'quota_alert_last_sent_';
@@ -66,38 +60,50 @@ class QuotaAlertService {
     final accounts = await _accounts.getAllAccounts();
 
     for (final account in accounts) {
-      final quota = await _quotas.getLatestQuota(account.id);
+      final accountId = account.id;
+      if (accountId == null) continue;
+
+      final quota = await _quotas.getLatestQuota(accountId);
       final remaining = quota?.remainingPercent;
-      if (remaining == null) continue;          // no data yet — skip
-      if (remaining > threshold) continue;       // still healthy
+      if (remaining == null) continue; // no data yet
+      if (remaining > threshold) continue; // still healthy
 
       // 4. Throttle per-account.
-      final key = '$_prefsPrefix${account.id}';
+      final key = '$_prefsPrefix$accountId';
       final lastSent = prefs.getInt(key) ?? 0;
       if (now - lastSent < _minIntervalBetweenAlerts.inMilliseconds) continue;
 
-      // 5. Fire it.
+      // 5. Fire alert.
       await _notifications.showQuotaAlert(
-        id: notificationIdFor(account.id),
-        title: '${account.label} quota is low',
+        id: notificationIdFor(accountId),
+        title: '${account.email} quota is low',
         body:
-            '${remaining.round()}% remaining — below your ${threshold}% threshold.',
-        payload: account.id,
+            '${remaining.round()}% remaining ($threshold% threshold). Tap to inspect or update.',
+        payload: accountId.toString(),
       );
 
       await prefs.setInt(key, now);
     }
   }
 
-  /// Clears the throttle for one account (e.g. after the user refreshes it)
-  /// and dismisses any outstanding notification.
-  Future<void> resetThrottle(String accountId) async {
+  /// Sends a sample notification to verify permissions and notifications.
+  Future<void> sendTestAlert() async {
+    final settings = await _settings.getSettings();
+    await _notifications.showQuotaAlert(
+      id: 99999,
+      title: 'QuotaPilot Alert Test',
+      body:
+          'Quota alerts are active! Threshold is set to ${settings.quotaAlertThreshold}%.',
+    );
+  }
+
+  /// Clears the throttle for one account (e.g. after the user refreshes it).
+  Future<void> resetThrottle(int accountId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('$_prefsPrefix$accountId');
     await _notifications.cancel(notificationIdFor(accountId));
   }
 
   /// Stable notification id derived from the account id.
-  static int notificationIdFor(String accountId) =>
-      accountId.hashCode & 0x7fffffff;
-}
+  static int notificationIdFor(int accountId) => accountId & 0x7fffffff;
+}
