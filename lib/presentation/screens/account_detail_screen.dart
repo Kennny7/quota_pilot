@@ -13,20 +13,41 @@ import '../providers/quota_providers.dart';
 import '../widgets/account_tile.dart';
 
 class AccountDetailScreen extends ConsumerWidget {
-  const AccountDetailScreen({super.key, required this.account});
+  const AccountDetailScreen({
+    super.key,
+    this.account,
+    this.id,
+  }) : assert(account != null || id != null, 'Either account or id must be provided');
 
-  final Account account;
+  final Account? account;
+  final dynamic id;
 
-  Future<void> _refresh(WidgetRef ref) async {
+  Account? _resolveAccount(WidgetRef ref) {
+    if (account != null) return account;
+    final intId = id is int ? id as int : int.tryParse(id?.toString() ?? '');
+    if (intId == null) return null;
+    final accounts = ref.watch(accountsProvider).valueOrNull ?? [];
     try {
-      await ref.read(quotaRefreshControllerProvider).refreshAccount(account.id);
+      return accounts.firstWhere((a) => a.id == intId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _refresh(WidgetRef ref, Account targetAccount) async {
+    final accountId = targetAccount.id;
+    if (accountId == null) return;
+    try {
+      await ref.read(quotaRefreshControllerProvider).refreshAccount(accountId);
     } catch (error) {
       // surfaced by the provider state; nothing else to do here
     }
   }
 
-  Future<void> _editManually(BuildContext context, WidgetRef ref) async {
-    final current = ref.read(latestQuotaProvider(account.id)).valueOrNull;
+  Future<void> _editManually(BuildContext context, WidgetRef ref, Account targetAccount) async {
+    final accountId = targetAccount.id;
+    if (accountId == null) return;
+    final current = ref.read(latestQuotaProvider(accountId)).valueOrNull;
     final result = await showDialog<_ManualQuotaResult>(
       context: context,
       builder: (_) => _ManualQuotaDialog(
@@ -37,7 +58,7 @@ class AccountDetailScreen extends ConsumerWidget {
     if (result == null) return;
     try {
       await ref.read(quotaRefreshControllerProvider).setManualQuota(
-            accountId: account.id,
+            accountId: accountId,
             used: result.used,
             limit: result.limit,
           );
@@ -52,9 +73,21 @@ class AccountDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final service = ref.watch(serviceDefinitionsProvider).byId(account.serviceId);
-    final latestAsync = ref.watch(latestQuotaProvider(account.id));
-    final historyAsync = ref.watch(quotaHistoryProvider(account.id));
+    final targetAccount = _resolveAccount(ref);
+
+    if (targetAccount == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Account Detail')),
+        body: const Center(
+          child: Text('Account not found.'),
+        ),
+      );
+    }
+
+    final targetAccountId = targetAccount.id;
+    final service = ref.watch(serviceDefinitionsProvider).byId(targetAccount.serviceId);
+    final latestAsync = ref.watch(latestQuotaProvider(targetAccountId));
+    final historyAsync = ref.watch(quotaHistoryProvider(targetAccountId));
 
     return Scaffold(
       appBar: AppBar(
@@ -63,7 +96,7 @@ class AccountDetailScreen extends ConsumerWidget {
           IconButton(
             tooltip: 'Refresh',
             icon: const Icon(Icons.refresh),
-            onPressed: () => _refresh(ref),
+            onPressed: () => _refresh(ref, targetAccount),
           ),
           PopupMenuButton<String>(
             onSelected: (value) async {
@@ -73,7 +106,7 @@ class AccountDetailScreen extends ConsumerWidget {
                   builder: (ctx) => AlertDialog(
                     title: const Text('Remove account?'),
                     content: Text(
-                      'Quota history for ${account.email} will be deleted.',
+                      'Quota history for ${targetAccount.email} will be deleted.',
                     ),
                     actions: [
                       TextButton(
@@ -88,7 +121,10 @@ class AccountDetailScreen extends ConsumerWidget {
                   ),
                 );
                 if (confirmed ?? false) {
-                  await ref.read(accountsProvider.notifier).remove(account.id);
+                  final id = targetAccount.id;
+                  if (id != null) {
+                    await ref.read(accountsProvider.notifier).remove(id);
+                  }
                   if (context.mounted) Navigator.of(context).pop();
                 }
               }
@@ -106,7 +142,7 @@ class AccountDetailScreen extends ConsumerWidget {
             margin: EdgeInsets.zero,
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: AccountTile(account: account, service: service),
+              child: AccountTile(account: targetAccount, service: service),
             ),
           ),
           const SizedBox(height: 16),
@@ -123,7 +159,7 @@ class AccountDetailScreen extends ConsumerWidget {
                 ),
                 error: (error, _) => ErrorView(
                   message: error.toString(),
-                  onRetry: () => ref.invalidate(latestQuotaProvider(account.id)),
+                  onRetry: () => ref.invalidate(latestQuotaProvider(targetAccountId)),
                 ),
                 data: (quota) => _CurrentQuota(
                   quota: quota,
@@ -146,7 +182,7 @@ class AccountDetailScreen extends ConsumerWidget {
                   error: (error, _) => ErrorView(
                     message: error.toString(),
                     onRetry: () =>
-                        ref.invalidate(quotaHistoryProvider(account.id)),
+                        ref.invalidate(quotaHistoryProvider(targetAccountId)),
                   ),
                   data: (history) => _QuotaHistoryChart(history: history),
                 ),
@@ -155,7 +191,7 @@ class AccountDetailScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
           FilledButton.tonalIcon(
-            onPressed: () => _editManually(context, ref),
+            onPressed: () => _editManually(context, ref, targetAccount),
             icon: const Icon(Icons.edit_outlined),
             label: const Text('Update quota manually'),
           ),
